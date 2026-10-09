@@ -1,0 +1,265 @@
+{
+  "version": 1,
+  "servers": [
+    { "id": "s1", "droplet": "zoo-1", "domain": "s1.zoo.sorv.dev" },
+    { "id": "s2", "droplet": "zoo-2", "domain": "s2.zoo.sorv.dev" },
+    { "id": "s3", "droplet": "zoo-3", "domain": "s3.zoo.sorv.dev" },
+    { "id": "s4", "droplet": "zoo-4", "domain": "s4.zoo.sorv.dev" }
+  ],
+  "chains": [
+    {
+      "id": "event-river", "title": "C1 Event river", "starter": "celery-hub",
+      "steps": {
+        "celery-hub": ["queued", "worker-ledger", "sent"],
+        "event-bus": ["ingested", "go-consumer", "py-forwarded"],
+        "search-svc": ["received", "indexed"],
+        "pipeline-py": ["clickhouse", "qdrant", "meili"]
+      }
+    },
+    {
+      "id": "shop-order", "title": "C2 Shop order", "starter": "mesh-shop",
+      "steps": {
+        "mesh-shop": ["order-created", "catalog-ok", "stock-reserved", "fulfilled", "webhook-sent"],
+        "catalog-api": ["signed-lookup"],
+        "rails-queue": ["webhook-received", "job-done"]
+      }
+    },
+    {
+      "id": "ping-pong", "title": "C3 Webhook ping-pong", "starter": "laravel-jobs",
+      "steps": {
+        "laravel-jobs": ["queued", "webhook-sent", "ack-received"],
+        "rails-queue": ["webhook-received", "job-done", "ack-sent"]
+      }
+    },
+    {
+      "id": "ssr-fanout", "title": "C4 SSR fan-out", "starter": "sveltekit-ssr",
+      "steps": {
+        "sveltekit-ssr": ["catalog", "search", "axum"],
+        "catalog-api": ["signed-lookup"],
+        "axum-cache": ["signed-lookup"]
+      }
+    },
+    {
+      "id": "rabbit-relay", "title": "C5 Rabbit relay", "starter": "rabbit-relay",
+      "steps": { "rabbit-relay": ["published", "consumed", "stored"] }
+    }
+  ],
+  "projects": [
+    {
+      "name": "zoo-control", "server": "s1", "url": "https://zoo-control.s1.zoo.sorv.dev",
+      "stack": "Vite + React + TS static", "kind": "static",
+      "services": [], "processes": [],
+      "proof": "P1", "ox_features": ["zero-config", "static-spa", "build-time-file"],
+      "links": [{ "label": "Panel", "path": "/" }],
+      "vars": { "signs": [], "verifies": [], "urls": {} },
+      "chains": [], "probe": "self"
+    },
+    {
+      "name": "celery-hub", "server": "s1", "url": "https://celery-hub.s1.zoo.sorv.dev",
+      "stack": "Django 5 + Celery + beat", "kind": "app",
+      "services": ["postgres", "ledger", "redis", "cache"], "processes": ["app", "worker", "beat"],
+      "proof": "P4", "ox_features": ["workers", "private-service", "shared-service", "second-postgres", "references", "migrate"],
+      "links": [{ "label": "Home", "path": "/" }],
+      "vars": { "signs": ["EVENTS_KEY"], "verifies": [], "urls": { "EVENTS_URL": "event-bus" } },
+      "chains": ["event-river"], "probe": "server"
+    },
+    {
+      "name": "rails-queue", "server": "s1", "url": "https://rails-queue.s1.zoo.sorv.dev",
+      "stack": "Rails 8 + Puma + Solid Queue", "kind": "app",
+      "services": ["postgres"], "processes": ["app", "jobs"],
+      "proof": "P4", "ox_features": ["zero-config", "workers", "migrate"],
+      "links": [{ "label": "Home", "path": "/" }],
+      "vars": { "signs": ["WEBHOOK_SECRET"], "verifies": ["WEBHOOK_SECRET"], "urls": { "LARAVEL_URL": "laravel-jobs" } },
+      "chains": ["shop-order", "ping-pong"], "probe": "server"
+    },
+    {
+      "name": "phoenix-live", "server": "s1", "url": "https://phoenix-live.s1.zoo.sorv.dev",
+      "stack": "Phoenix 1.8 LiveView", "kind": "app",
+      "services": ["postgres"], "processes": ["app"],
+      "proof": "P2", "ox_features": ["zero-config", "migrate", "websockets"],
+      "links": [{ "label": "LiveView", "path": "/" }],
+      "vars": { "signs": [], "verifies": [], "urls": {} },
+      "chains": [], "probe": "server"
+    },
+    {
+      "name": "sveltekit-ssr", "server": "s1", "url": "https://sveltekit-ssr.s1.zoo.sorv.dev",
+      "stack": "SvelteKit adapter-node", "kind": "ssr",
+      "services": [], "processes": ["app"],
+      "proof": "P3", "ox_features": ["zero-config", "references", "secrets"],
+      "links": [{ "label": "Fan-out page", "path": "/" }],
+      "vars": { "signs": ["INTERNAL_TOKEN"], "verifies": [], "urls": { "CATALOG_URL": "catalog-api", "SEARCH_URL": "search-svc", "AXUM_URL": "axum-cache" } },
+      "chains": ["ssr-fanout"], "probe": "server"
+    },
+    {
+      "name": "nest-bullmq", "server": "s1", "url": "https://nest-bullmq.s1.zoo.sorv.dev",
+      "stack": "NestJS + BullMQ", "kind": "api",
+      "services": ["postgres", "redis"], "processes": ["app", "worker"],
+      "proof": "P2", "ox_features": ["workers", "migrate"],
+      "links": [{ "label": "Home", "path": "/" }],
+      "vars": { "signs": [], "verifies": [], "urls": {} },
+      "chains": [], "probe": "server"
+    },
+    {
+      "name": "catalog-api", "server": "s2", "url": "https://catalog-api.s2.zoo.sorv.dev",
+      "stack": "FastAPI + SQLAlchemy 2 + Alembic", "kind": "api",
+      "services": ["postgres", "redis"], "processes": ["app"],
+      "proof": "P3", "ox_features": ["zero-config", "migrate"],
+      "links": [{ "label": "Items", "path": "/api/items" }],
+      "vars": { "signs": [], "verifies": ["INTERNAL_TOKEN"], "urls": {} },
+      "chains": ["shop-order", "ssr-fanout"], "probe": "server"
+    },
+    {
+      "name": "search-svc", "server": "s2", "url": "https://search-svc.s2.zoo.sorv.dev",
+      "stack": "Go chi + Meilisearch", "kind": "api",
+      "services": ["search", "postgres"], "processes": ["app", "indexer"],
+      "proof": "P3", "ox_features": ["custom-service", "workers"],
+      "links": [{ "label": "Search", "path": "/api/search?q=zoo" }],
+      "vars": { "signs": [], "verifies": ["SEARCH_INGEST_KEY"], "urls": {} },
+      "chains": ["event-river"], "probe": "server"
+    },
+    {
+      "name": "laravel-jobs", "server": "s2", "url": "https://laravel-jobs.s2.zoo.sorv.dev",
+      "stack": "Laravel 12", "kind": "app",
+      "services": ["mysql", "redis"], "processes": ["app", "queue", "scheduler"],
+      "proof": "P4", "ox_features": ["workers", "cron", "storage-keep", "migrate"],
+      "links": [{ "label": "Home", "path": "/" }],
+      "vars": { "signs": ["WEBHOOK_SECRET"], "verifies": ["WEBHOOK_SECRET"], "urls": { "RAILS_URL": "rails-queue" } },
+      "chains": ["ping-pong"], "probe": "server"
+    },
+    {
+      "name": "remix-router", "server": "s2", "url": "https://remix-router.s2.zoo.sorv.dev",
+      "stack": "React Router 7 SSR", "kind": "ssr",
+      "services": [], "processes": ["app"],
+      "proof": "P2", "ox_features": ["zero-config", "build-time-var", "secrets"],
+      "links": [{ "label": "Home", "path": "/" }],
+      "vars": { "signs": [], "verifies": [], "urls": {} },
+      "chains": [], "probe": "server"
+    },
+    {
+      "name": "cron-ledger", "server": "s2", "url": "https://cron-ledger.s2.zoo.sorv.dev",
+      "stack": "Flask + gunicorn", "kind": "app",
+      "services": ["postgres"], "processes": ["app", "cron"],
+      "proof": "P2", "ox_features": ["cron", "migrate"],
+      "links": [{ "label": "Run history", "path": "/" }],
+      "vars": { "signs": [], "verifies": [], "urls": {} },
+      "chains": [], "probe": "server"
+    },
+    {
+      "name": "hono-files", "server": "s2", "url": "https://hono-files.s2.zoo.sorv.dev",
+      "stack": "Bun + Hono + SQLite", "kind": "api",
+      "services": ["s3"], "processes": ["app"],
+      "proof": "P2", "ox_features": ["custom-service", "storage-keep"],
+      "links": [{ "label": "Files", "path": "/" }],
+      "vars": { "signs": [], "verifies": [], "urls": {} },
+      "chains": [], "probe": "server"
+    },
+    {
+      "name": "event-bus", "server": "s3", "url": "https://event-bus.s3.zoo.sorv.dev",
+      "stack": "Go chi + NATS JetStream", "kind": "api",
+      "services": ["nats", "postgres"], "processes": ["app", "go-consumer", "py-consumer"],
+      "proof": "P4", "ox_features": ["custom-service", "workers", "mixed-languages"],
+      "links": [{ "label": "Home", "path": "/" }],
+      "vars": { "signs": ["SEARCH_INGEST_KEY"], "verifies": ["EVENTS_KEY"], "urls": { "SEARCH_URL": "search-svc" } },
+      "chains": ["event-river"], "probe": "server"
+    },
+    {
+      "name": "next-prisma", "server": "s3", "url": "https://next-prisma.s3.zoo.sorv.dev",
+      "stack": "Next.js 15 SSR + Prisma", "kind": "ssr",
+      "services": ["postgres"], "processes": ["app"],
+      "proof": "P2", "ox_features": ["zero-config", "prisma-migrate"],
+      "links": [{ "label": "Home", "path": "/" }],
+      "vars": { "signs": [], "verifies": [], "urls": {} },
+      "chains": [], "probe": "server"
+    },
+    {
+      "name": "deno-fresh", "server": "s3", "url": "https://deno-fresh.s3.zoo.sorv.dev",
+      "stack": "Deno Fresh 2", "kind": "ssr",
+      "services": [], "processes": ["app"],
+      "proof": "P1", "ox_features": ["zero-config"],
+      "links": [{ "label": "Home", "path": "/" }],
+      "vars": { "signs": [], "verifies": [], "urls": {} },
+      "chains": [], "probe": "server"
+    },
+    {
+      "name": "rabbit-relay", "server": "s3", "url": "https://rabbit-relay.s3.zoo.sorv.dev",
+      "stack": "Fastify + RabbitMQ", "kind": "api",
+      "services": ["rabbit", "postgres"], "processes": ["app", "consumer"],
+      "proof": "P4", "ox_features": ["custom-service", "apt-packages", "workers"],
+      "links": [{ "label": "Home", "path": "/" }],
+      "vars": { "signs": [], "verifies": [], "urls": {} },
+      "chains": ["rabbit-relay"], "probe": "server"
+    },
+    {
+      "name": "mesh-shop", "server": "s3", "url": "https://mesh-shop.s3.zoo.sorv.dev",
+      "stack": "Monorepo: Go gateway + Bun orders + Python stock + Node fulfiller + static web", "kind": "app",
+      "services": ["postgres", "redis"], "processes": ["app", "orders", "stock", "fulfiller"],
+      "proof": "P4", "ox_features": ["port-workers", "worker-urls", "static-api", "workers", "mixed-languages"],
+      "links": [{ "label": "Shop", "path": "/" }],
+      "vars": { "signs": ["INTERNAL_TOKEN", "WEBHOOK_SECRET"], "verifies": [], "urls": { "CATALOG_URL": "catalog-api", "RAILS_URL": "rails-queue" } },
+      "chains": ["shop-order"], "probe": "server"
+    },
+    {
+      "name": "symfony-notes", "server": "s3", "url": "https://symfony-notes.s3.zoo.sorv.dev",
+      "stack": "Symfony 7 + Doctrine", "kind": "app",
+      "services": ["mysql"], "processes": ["app"],
+      "proof": "P2", "ox_features": ["zero-config", "migrate"],
+      "links": [{ "label": "Notes", "path": "/" }],
+      "vars": { "signs": [], "verifies": [], "urls": {} },
+      "chains": [], "probe": "server"
+    },
+    {
+      "name": "pipeline-py", "server": "s4", "url": "https://pipeline-py.s4.zoo.sorv.dev",
+      "stack": "Python workers + cron + Starlette", "kind": "app",
+      "services": ["clickhouse", "search", "qdrant"], "processes": ["app", "puller", "worker", "cron"],
+      "proof": "P4", "ox_features": ["custom-service", "workers", "cron"],
+      "links": [{ "label": "Home", "path": "/" }],
+      "vars": { "signs": ["EVENTS_KEY"], "verifies": [], "urls": { "EVENTS_URL": "event-bus" } },
+      "chains": ["event-river"], "probe": "server"
+    },
+    {
+      "name": "axum-cache", "server": "s4", "url": "https://axum-cache.s4.zoo.sorv.dev",
+      "stack": "Rust Axum + sqlx", "kind": "api",
+      "services": ["postgres", "redis"], "processes": ["app"],
+      "proof": "P3", "ox_features": ["zero-config", "migrate"],
+      "links": [{ "label": "Home", "path": "/" }],
+      "vars": { "signs": [], "verifies": ["INTERNAL_TOKEN"], "urls": {} },
+      "chains": ["ssr-fanout"], "probe": "server"
+    },
+    {
+      "name": "nuxt-chat", "server": "s4", "url": "https://nuxt-chat.s4.zoo.sorv.dev",
+      "stack": "Nuxt 4 SSR + SSE chat", "kind": "ssr",
+      "services": ["redis"], "processes": ["app"],
+      "proof": "P2", "ox_features": ["zero-config", "sse"],
+      "links": [{ "label": "Chat", "path": "/" }],
+      "vars": { "signs": [], "verifies": [], "urls": {} },
+      "chains": [], "probe": "server"
+    },
+    {
+      "name": "astro-api", "server": "s4", "url": "https://astro-api.s4.zoo.sorv.dev",
+      "stack": "Astro static + Hono API", "kind": "static",
+      "services": [], "processes": ["app"],
+      "proof": "P2", "ox_features": ["static-api", "build-time-var"],
+      "links": [{ "label": "Home", "path": "/" }],
+      "vars": { "signs": [], "verifies": [], "urls": {} },
+      "chains": [], "probe": "server"
+    },
+    {
+      "name": "angular-static", "server": "s4", "url": "https://angular-static.s4.zoo.sorv.dev",
+      "stack": "Angular 20 static", "kind": "static",
+      "services": [], "processes": [],
+      "proof": "P3", "ox_features": ["zero-config", "build-time-var", "browser-cors"],
+      "links": [{ "label": "Home", "path": "/" }, { "label": "Selftest", "path": "/selftest" }],
+      "vars": { "signs": [], "verifies": [], "urls": { "CATALOG_URL": "catalog-api", "SEARCH_URL": "search-svc" } },
+      "chains": [], "probe": "iframe"
+    },
+    {
+      "name": "release-lab", "server": "s4", "url": "https://release-lab.s4.zoo.sorv.dev",
+      "stack": "Go stdlib", "kind": "api",
+      "services": [], "processes": ["app"],
+      "proof": "P2", "ox_features": ["zero-downtime", "staging", "previews", "promote", "rollback"],
+      "links": [{ "label": "Home", "path": "/" }, { "label": "Staging", "path": "https://release-lab-staging.s4.zoo.sorv.dev/" }],
+      "vars": { "signs": [], "verifies": [], "urls": {} },
+      "chains": [], "probe": "server"
+    }
+  ]
+}
