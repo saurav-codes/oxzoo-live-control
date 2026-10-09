@@ -35,6 +35,9 @@ export interface Probe {
   ms: number;
   at?: string;
   release?: string;
+  stack?: string;
+  server?: string;
+  env?: string;
   checks: Check[];
   vars: ZooVar[];
 }

@@ -25,15 +25,30 @@ function base(p: Project): string {
   return p.probe === "self" ? location.origin : p.url;
 }
 
+// An iframe project's health file has no CORS headers (a static file), so the
+// panel cannot read it cross-origin: its health is what the selftest reports from
+// inside the iframe, and that same run is the probe getProbe returns next.
+const iframeRuns = new Map<string, Promise<Probe>>();
+
 export async function getHealth(p: Project): Promise<{ health: Health; ms: number }> {
   const t = performance.now();
+  if (p.probe === "iframe") {
+    const run = iframeProbe(p.url);
+    iframeRuns.set(p.name, run);
+    const { name, stack, server, release, env } = await run;
+    return { health: { name, stack, server, release, env }, ms: Math.round(performance.now() - t) };
+  }
   const health = await fetchJSON<Health>(base(p) + healthPath(p), 8000);
   return { health, ms: Math.round(performance.now() - t) };
 }
 
 export function getProbe(p: Project, reg: Registry): Promise<Probe> {
   if (p.probe === "self") return selfProbe(reg);
-  if (p.probe === "iframe") return iframeProbe(p.url);
+  if (p.probe === "iframe") {
+    const run = iframeRuns.get(p.name) ?? iframeProbe(p.url);
+    iframeRuns.delete(p.name);
+    return run;
+  }
   return fetchJSON<Probe>(p.url + "/_zoo/probe", 25000);
 }
 
