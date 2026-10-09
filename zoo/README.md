@@ -1,7 +1,7 @@
 # oxzoo-live
 
 A live zoo of 24 real example projects spread over 4 servers, built to stress-test
-ox end to end: stack detection, built-in and custom services, workers, cron, storage,
+[ox](https://deploywithox.com) end to end: stack detection, built-in and custom services, workers, cron, storage,
 zero-downtime deploys, staging, previews, promote, rollback, variables, secrets and
 cross-server calls over public HTTPS. One control panel (`zoo-control`) probes all of
 them live from the browser.

@@ -143,6 +143,10 @@ export function App() {
         {tab === "chains" && <Chains reg={reg} onPass={() => setPasses(loadChainPasses())} />}
         {tab === "watch" && <Watch project={reg.projects.find((p) => p.name === "release-lab")} />}
       </main>
+      <footer className="foot muted small">
+        Powered by <a href="https://deploywithox.com" target="_blank" rel="noreferrer">ox</a>: deploy a repo to your own server with one command.{" "}
+        <a href="https://deploywithox.com/docs" target="_blank" rel="noreferrer">Docs</a>
+      </footer>
       {openProject && (
         <Drawer
           project={openProject}

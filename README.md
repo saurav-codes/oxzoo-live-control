@@ -1,6 +1,10 @@
 # zoo-control
 
-> **Role in the zoo:** project `zoo-control` of [oxzoo-live](https://github.com/saurav-codes/oxzoo-live-control/blob/main/zoo/README.md#projects), deployed with ox on server s1 at https://zoo-control.s1.zoo.sorv.dev. The contract it follows is [DESIGN.md](https://github.com/saurav-codes/oxzoo-live-control/blob/main/zoo/DESIGN.md).
+Deployed with [ox](https://deploywithox.com): deploy a repo to your own server with one command, no Docker. [Docs](https://deploywithox.com/docs) · [Guide for this stack](https://deploywithox.com/docs/guides/react-vite)
+
+**Live demo:** https://zoo-control.s1.zoo.sorv.dev
+
+> **Role in the zoo:** project `zoo-control` of [oxzoo-live](https://github.com/saurav-codes/oxzoo-live-control/blob/main/zoo/README.md#projects), deployed with [ox](https://deploywithox.com) on server s1 at https://zoo-control.s1.zoo.sorv.dev. The contract it follows is [DESIGN.md](https://github.com/saurav-codes/oxzoo-live-control/blob/main/zoo/DESIGN.md).
 
 The oxzoo-live control panel: a Vite + React + TypeScript static SPA on s1
 (`https://zoo-control.s1.zoo.sorv.dev`) that probes all 24 zoo projects live from

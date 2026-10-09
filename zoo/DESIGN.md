@@ -1,5 +1,7 @@
 # oxzoo-live design
 
+The zoo is deployed with [ox](https://deploywithox.com) ([docs](https://deploywithox.com/docs)).
+
 This file is the contract every project follows. If code and this file disagree,
 fix the code or change this file on purpose, never drift silently.
 
