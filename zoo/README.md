@@ -6,7 +6,7 @@ zero-downtime deploys, staging, previews, promote, rollback, variables, secrets 
 cross-server calls over public HTTPS. One control panel (`zoo-control`) probes all of
 them live from the browser.
 
-Each subfolder is one project and later becomes its own GitHub repo
+Each project is its own GitHub repo
 (`github.com/saurav-codes/oxzoo-live-<name>`, the panel is `oxzoo-live-control`). The full contract and every chain are in
 [DESIGN.md](DESIGN.md).
 
@@ -38,8 +38,8 @@ SeaweedFS covers S3), MongoDB (not supported).
 Domains: `<project>.s<N>.zoo.sorv.dev`, served by a wildcard A record
 `*.s<N>.zoo.sorv.dev` per server (Cloudflare, DNS only, grey cloud, so Caddy gets
 Let's Encrypt certificates). Previews use `*.pv.zoo.sorv.dev` pointing at s4.
-Planned hostnames: 24 apps + 1 staging + at most 2 previews = 27 certificates,
-well under the 50 per week limit for `sorv.dev`.
+Hostnames: 24 apps + 1 staging + at most 2 previews = 27 certificates, under
+Let's Encrypt's 50 per week limit for `sorv.dev`, which other test runs share.
 
 ## Projects
 
@@ -92,10 +92,11 @@ cross-server call with a verified shared secret passes, P4 an end-to-end chain p
 - `README.md`: what it proves, ox features, exact variables, recorded `ox check` output
 - `GET /_zoo/health` and `GET /_zoo/probe` per [DESIGN.md](DESIGN.md#contract)
 
-## Deploy phase (not done yet)
+## Deploy phase (live)
 
-Needs from the owner: create the `oxzoo-*` GitHub repos (or allow the agent to),
-install the ox GitHub App on them, sign in to the plane, create 4 droplets tagged
-`ox-zoo` and the Cloudflare records. Then `deploy/` scripts generate the shared
-secrets into `~/.config/oxzoo/shared.env` (never committed) and set them with
-`ox vars set <project> --from-file`.
+Deployed on 2026-10-09 with ox Cloud (https://deploywithox.com) to four
+DigitalOcean droplets, oxzoo-s1 to s4, with one wildcard DNS record per server
+under `*.sN.zoo.sorv.dev` and previews under `*.pv.zoo.sorv.dev`. The panel is
+https://zoo-control.s1.zoo.sorv.dev: its Run everything, Variable flow and chain
+buttons show the live state of every project. The shared secrets are generated
+outside git and set on each project with `ox vars set <project> --from-file`.
